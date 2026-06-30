@@ -23,13 +23,18 @@ export interface MetarDefaults {
   variableWind?: boolean;
 }
 
-const AIRPORTS_CSV_URL = '/ourairports-data/airports.csv';
+const AIRPORTS_CSV_URL =
+  'https://davidmegginson.github.io/ourairports-data/airports.csv';
 
-const RUNWAYS_CSV_URL = '/ourairports-data/runways.csv';
+const RUNWAYS_CSV_URL =
+  'https://davidmegginson.github.io/ourairports-data/runways.csv';
 
 const METAR_API_URL = (icao: string) =>
-  `/awc/api/data/metar?ids=${encodeURIComponent(icao)}&format=json`;
+  `https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(
+    icao,
+  )}&format=json`;
 
+  
 function parseCsv(csv: string): Record<string, string>[] {
   const rows: string[][] = [];
   let row: string[] = [];
