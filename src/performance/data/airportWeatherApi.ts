@@ -29,10 +29,8 @@ const AIRPORTS_CSV_URL =
 const RUNWAYS_CSV_URL =
   'https://davidmegginson.github.io/ourairports-data/runways.csv';
 
-const METAR_API_URL = (icao: string) =>
-  `https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(
-    icao,
-  )}&format=json`;
+const METARS_CACHE_CSV_URL =
+  'https://aviationweather.gov/data/cache/metars.cache.csv';
 
   
 function parseCsv(csv: string): Record<string, string>[] {
@@ -343,40 +341,60 @@ export async function fetchMetarDefaults(airportIcao: string): Promise<MetarDefa
     throw new Error('Enter an airport ICAO first.');
   }
 
-  const response = await fetch(METAR_API_URL(query));
+  const response = await fetch(METARS_CACHE_CSV_URL, {
+    cache: 'no-store',
+  });
 
   if (!response.ok) {
-    throw new Error(`METAR for ${query} could not be fetched.`);
+    throw new Error(`METAR data could not be fetched.`);
   }
 
-  const json = (await response.json()) as Array<Record<string, unknown>>;
+  const rows = parseCsv(await response.text());
 
-  if (!Array.isArray(json) || !json[0]) {
+  const item = rows.find((row) =>
+    [
+      row.station_id,
+      row.icaoId,
+      row.icao_id,
+      row.id,
+    ]
+      .filter(Boolean)
+      .some((code) => code.toUpperCase() === query),
+  );
+
+  if (!item) {
     throw new Error(`No METAR found for ${query}.`);
   }
 
-  const item = json[0];
-  const raw = String(item.rawOb ?? item.raw_text ?? item.raw ?? '');
+  const raw = String(
+    item.raw_text ??
+      item.rawOb ??
+      item.raw ??
+      '',
+  );
+
   const parsed = parseRawMetar(raw);
 
   return {
     raw,
     oatC:
-      numberFromUnknown(item.temp) ??
       numberFromUnknown(item.temp_c) ??
+      numberFromUnknown(item.temp) ??
       parsed.oatC,
     qnhHpa:
+      parseQnhFromApiValue(item.altim_in_hg) ??
       parseQnhFromApiValue(item.altim) ??
       parsed.qnhHpa,
     windDirectionDeg:
-      numberFromUnknown(item.wdir) ??
       numberFromUnknown(item.wind_dir_degrees) ??
+      numberFromUnknown(item.wdir) ??
       parsed.windDirectionDeg,
     windSpeedKt:
-      numberFromUnknown(item.wspd) ??
       numberFromUnknown(item.wind_speed_kt) ??
+      numberFromUnknown(item.wspd) ??
       parsed.windSpeedKt,
     windGustKt:
+      numberFromUnknown(item.wind_gust_kt) ??
       numberFromUnknown(item.wgst) ??
       parsed.windGustKt,
     variableWind: parsed.variableWind,
