@@ -2,16 +2,18 @@
 
 A web-based aircraft performance calculator built with React, TypeScript, and Vite.
 
-This project is currently focused on an **Airbus A380-842 takeoff performance module** using a simulator-oriented calculation model. It allows the user to enter runway, weather, aircraft weight, thrust, flap, anti-ice, and configuration data to generate takeoff speeds and performance-related outputs.
+This project is currently focused on an **Airbus Aircrafts** using a simulator-oriented calculation model. It allows the user to enter runway, weather, aircraft weight, thrust, flap, anti-ice, and configuration data to generate takeoff speeds and performance-related outputs.
 
 ## Live Website
 
 https://tomassantosaviation.github.io/flight-performance-tool/
 
+## Current Supported Aircrafts
+* A380-842
+
 ## Current Features
 
 * Aircraft selection screen
-* A380-842 takeoff performance module
 * Runway data fetching by airport ICAO
 * METAR-based weather input
 * Manual wind, OAT, QNH, TOW, CG, flap, thrust, anti-ice, and runway condition inputs
@@ -82,4 +84,12 @@ Always use official aircraft performance software, approved manuals, certified o
 
 Work in progress.
 
-The current A380 module is being developed as a simulator-oriented performance model. Future improvements may include additional aircraft types, landing performance, improved performance tables, and a more advanced user interface.
+The current modules are being developed as a simulator-oriented performance model. Future improvements may include additional aircraft types, landing performance, improved performance tables, and a more advanced user interface.
+
+## License
+
+Copyright © 2026 Tomás Santos.
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+This software is provided for educational, simulation, and software development purposes only. It is not approved, certified, or suitable for real-world aviation use.
