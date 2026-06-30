@@ -29,8 +29,8 @@ const AIRPORTS_CSV_URL =
 const RUNWAYS_CSV_URL =
   'https://davidmegginson.github.io/ourairports-data/runways.csv';
 
-const METARS_CACHE_CSV_URL =
-  'https://aviationweather.gov/data/cache/metars.cache.csv';
+const METAR_API_URL = (icao: string) =>
+  `https://metar.vatsim.net/${encodeURIComponent(icao)}?format=json`;
 
   
 function parseCsv(csv: string): Record<string, string>[] {
@@ -252,43 +252,7 @@ export async function fetchRunwayOptions(airportIcao: string): Promise<RunwayOpt
     .sort((a, b) => a.ident.localeCompare(b.ident));
 }
 
-function numberFromUnknown(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
 
-  if (typeof value === 'string') {
-    const number = Number(value);
-
-    if (Number.isFinite(number)) {
-      return number;
-    }
-  }
-
-  return undefined;
-}
-
-function parseQnhFromApiValue(value: unknown): number | undefined {
-  const number = numberFromUnknown(value);
-
-  if (number === undefined) {
-    return undefined;
-  }
-
-  if (number > 800 && number < 1100) {
-    return Math.round(number);
-  }
-
-  if (number > 20 && number < 35) {
-    return Math.round(number * 33.8639);
-  }
-
-  if (number > 2000 && number < 4000) {
-    return Math.round((number / 100) * 33.8639);
-  }
-
-  return undefined;
-}
 
 function parseMetarTemp(value: string): number {
   return value.startsWith('M') ? -Number(value.slice(1)) : Number(value);
@@ -341,62 +305,96 @@ export async function fetchMetarDefaults(airportIcao: string): Promise<MetarDefa
     throw new Error('Enter an airport ICAO first.');
   }
 
-  const response = await fetch(METARS_CACHE_CSV_URL, {
+  const response = await fetch(METAR_API_URL(query), {
     cache: 'no-store',
   });
 
   if (!response.ok) {
-    throw new Error(`METAR data could not be fetched.`);
+    throw new Error(`METAR for ${query} could not be fetched.`);
   }
 
-  const rows = parseCsv(await response.text());
+  const body = await response.text();
 
-  const item = rows.find((row) =>
-    [
-      row.station_id,
-      row.icaoId,
-      row.icao_id,
-      row.id,
-    ]
-      .filter(Boolean)
-      .some((code) => code.toUpperCase() === query),
-  );
+  let raw = '';
 
-  if (!item) {
-    throw new Error(`No METAR found for ${query}.`);
+  try {
+    const json = JSON.parse(body) as unknown;
+
+    function extractRawMetar(entry: unknown): string {
+      if (typeof entry === 'string') {
+        return entry.trim();
+      }
+
+      if (!entry || typeof entry !== 'object') {
+        return '';
+      }
+
+      const object = entry as Record<string, unknown>;
+
+      return String(
+        object.metar ??
+          object.rawOb ??
+          object.raw_text ??
+          object.raw ??
+          object.text ??
+          '',
+      ).trim();
+    }
+
+    if (Array.isArray(json)) {
+      const item = json.find((entry) => {
+        if (!entry || typeof entry !== 'object') {
+          return false;
+        }
+
+        const object = entry as Record<string, unknown>;
+
+        return String(object.id ?? object.station_id ?? object.icaoId ?? '')
+          .toUpperCase()
+          .trim() === query;
+      });
+
+      raw = extractRawMetar(item);
+    } else if (json && typeof json === 'object') {
+      const object = json as Record<string, unknown>;
+
+      if (Array.isArray(object.data)) {
+        const item = object.data.find((entry) => {
+          if (!entry || typeof entry !== 'object') {
+            return false;
+          }
+
+          const dataObject = entry as Record<string, unknown>;
+
+          return String(dataObject.id ?? dataObject.station_id ?? dataObject.icaoId ?? '')
+            .toUpperCase()
+            .trim() === query;
+        });
+
+        raw = extractRawMetar(item);
+      } else {
+        raw = extractRawMetar(object);
+      }
+    } else {
+      raw = extractRawMetar(json);
+    }
+  } catch {
+    raw = body.trim();
   }
 
-  const raw = String(
-    item.raw_text ??
-      item.rawOb ??
-      item.raw ??
-      '',
-  );
+  if (!raw) {
+    throw new Error(`No usable METAR found for ${query}.`);
+  }
 
   const parsed = parseRawMetar(raw);
 
   return {
     raw,
-    oatC:
-      numberFromUnknown(item.temp_c) ??
-      numberFromUnknown(item.temp) ??
-      parsed.oatC,
-    qnhHpa:
-      parseQnhFromApiValue(item.altim_in_hg) ??
-      parseQnhFromApiValue(item.altim) ??
-      parsed.qnhHpa,
-    windDirectionDeg:
-      numberFromUnknown(item.wind_dir_degrees) ??
-      numberFromUnknown(item.wdir) ??
-      parsed.windDirectionDeg,
-    windSpeedKt:
-      numberFromUnknown(item.wind_speed_kt) ??
-      numberFromUnknown(item.wspd) ??
-      parsed.windSpeedKt,
-    windGustKt:
-      numberFromUnknown(item.wind_gust_kt) ??
-      numberFromUnknown(item.wgst) ??
-      parsed.windGustKt,
+    oatC: parsed.oatC,
+    qnhHpa: parsed.qnhHpa,
+    windDirectionDeg: parsed.windDirectionDeg,
+    windSpeedKt: parsed.windSpeedKt,
+    windGustKt: parsed.windGustKt,
     variableWind: parsed.variableWind,
   };
 }
