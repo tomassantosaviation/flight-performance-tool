@@ -4,6 +4,7 @@
 // SIMULATION TOOL ONLY. NOT FOR REAL WORLD AVIATION.
 
 type RunwayCondition = 'DRY' | 'WET' | 'CONTAMINATED';
+type Rwycc = 1 | 2 | 3 | 4 | 5 | 6;
 type FlapConfig = 'CONF 1+F' | 'CONF 2' | 'CONF 3';
 type AntiIceConfig = 'OFF' | 'ENG' | 'ENG+WING';
 type ThrustMode = 'FLEX' | 'TOGA';
@@ -39,6 +40,9 @@ interface PilotInput {
   cgPercentMac: number;
   flapConfig: FlapConfig;
   runwayCondition: RunwayCondition;
+  rwycc?: Rwycc;
+  runwayWidthM?: number | null;
+  brakeTempC?: number | null;
   packsOn: boolean;
   antiIce: AntiIceConfig;
   thrustMode: ThrustMode;
@@ -67,6 +71,7 @@ interface TakeoffResult {
   ths: string;
   headwindKt: number;
   crosswindKt: number;
+  estimatedTireSpeedKt: number;
   pressureAltitudeFt: number;
   isaDeviationC: number;
   densityAltitudeFt: number;
@@ -153,11 +158,72 @@ const TRENT_972B_84_ENGINE = {
   thrustToClimbExponent: 1.00,
 };
 
+const A380_TAKEOFF_CROSSWIND_LIMIT_BY_RWYCC: Record<Rwycc, number> = {
+  6: 35,
+  5: 35,
+  4: 27,
+  3: 20,
+  2: 20,
+  1: 15,
+};
+
+const A380_CERTIFIED_LIMITS = {
+  maxFlapSpeedKt: {
+    config1: 263,
+    config1F: 222,
+    config2: 220,
+    config3: 196,
+    configFull: 182,
+  },
+
+  maxMeanRunwaySlopePercent: 2,
+  minimumRunwayWidthM: 45,
+
+  maxTakeoffTailwindKt: 15,
+  maxLandingTailwindBelow8000FtKt: 15,
+  maxLandingTailwindAtOrAbove8000FtKt: 10,
+
+  maxGroundTireSpeedKt: 204,
+
+  minControlSpeedsKt: {
+    vmcl: 120,
+    vmcl2: 144,
+  },
+
+  maxBrakeTempForTakeoffC: 300,
+
+  maxFlexIsaDeviationC: 60,
+  reducedThrustAllowedOnContaminatedRunway: false,
+
+  takeoffPacksOffProhibited: true,
+
+  engineLimits: {
+    takeoffEgtC: 900,
+    takeoffAllEnginesLimitMin: 5,
+    takeoffOneEngineInoperativeLimitMin: 10,
+    mctEgtC: 850,
+    startEgtGroundC: 700,
+    startEgtInFlightC: 850,
+  },
+
+  oilLimits: {
+    maxContinuousTempC: 196,
+    minStartingTempC: -40,
+    minPriorToTakeoffTempC: 40,
+  },
+
+  shaftSpeedLimits: {
+    n1Percent: 97.2,
+    n2Percent: 98.7,
+    n3Percent: 97.8,
+  },
+};
+
 const A380_PERF_PLACEHOLDERS = {
-  maxTailwindKt: 10,
-  maxCrosswindDryKt: 40,
-  maxCrosswindWetKt: 30,
-  maxCrosswindContaminatedKt: 15,
+  maxTailwindKt: A380_CERTIFIED_LIMITS.maxTakeoffTailwindKt,
+  maxCrosswindDryKt: 35,
+  maxCrosswindWetKt: 35,
+  maxCrosswindContaminatedKt: 20,
 
   maxFlexTempC: TRENT_972B_84_ENGINE.maxFlexTempC,
   minFlexAboveOatC: 5,
@@ -464,6 +530,9 @@ export function calculateTakeoffPerformance(input: PilotInput): TakeoffResult {
 
   const wind = calculateWindComponents(input.windDirectionDeg, input.windSpeedKt, input.runwayHeadingDeg);
 
+  const estimatedTireSpeedKt = Math.round(vSpeeds.vr - wind.headwindKt);
+  const reducedThrustNotAllowedReason = getReducedThrustNotAllowedReason(input);
+
   const togaPossible = isTakeoffPossibleAtThrustRatio(
     input,
     pressureAltitudeFt,
@@ -474,7 +543,7 @@ export function calculateTakeoffPerformance(input: PilotInput): TakeoffResult {
   );
 
   const calculatedFlexTempC =
-    input.thrustMode === 'TOGA'
+    input.thrustMode === 'TOGA' || reducedThrustNotAllowedReason !== null
       ? null
       : estimateFlexTemp(input, pressureAltitudeFt, isaDeviationC, densityAltitudeFt, wind.headwindKt);
 
@@ -493,11 +562,17 @@ export function calculateTakeoffPerformance(input: PilotInput): TakeoffResult {
       : getTakeoffThrustRatioForAssumedTemp(input, flexTempC);
 
   const flexReason =
-    input.thrustMode === 'FLEX' && calculatedFlexTempC === null
-      ? togaPossible
-        ? 'FLEX NOT AVAILABLE - TOGA REQUIRED'
-        : 'FLEX NOT AVAILABLE - TOGA ALSO DOES NOT SATISFY PERFORMANCE LIMITS'
-      : undefined;
+    input.thrustMode === 'FLEX' && reducedThrustNotAllowedReason !== null
+      ? reducedThrustNotAllowedReason
+      : input.thrustMode === 'FLEX' && calculatedFlexTempC === null
+        ? togaPossible
+          ? 'FLEX NOT AVAILABLE - TOGA REQUIRED'
+          : 'FLEX NOT AVAILABLE - TOGA ALSO DOES NOT SATISFY PERFORMANCE LIMITS'
+        : undefined;    input.thrustMode === 'FLEX' && calculatedFlexTempC === null
+        ? togaPossible
+          ? 'FLEX NOT AVAILABLE - TOGA REQUIRED'
+          : 'FLEX NOT AVAILABLE - TOGA ALSO DOES NOT SATISFY PERFORMANCE LIMITS'
+        : undefined;
 
   const estimatedRequiredToraM = estimateRequiredTora(
     input,
@@ -527,6 +602,52 @@ export function calculateTakeoffPerformance(input: PilotInput): TakeoffResult {
   const warnings: string[] = [];
   const notes: string[] = [];
 
+  if (!input.packsOn && A380_CERTIFIED_LIMITS.takeoffPacksOffProhibited) {
+  warnings.push('TAKEOFF WITH BOTH PACKS OFF IS PROHIBITED');
+}
+
+if (
+  input.runwayWidthM !== undefined &&
+  input.runwayWidthM !== null &&
+  input.runwayWidthM < A380_CERTIFIED_LIMITS.minimumRunwayWidthM
+) {
+  warnings.push(
+    `RUNWAY WIDTH BELOW CERTIFIED MINIMUM ${A380_CERTIFIED_LIMITS.minimumRunwayWidthM} M`,
+  );
+}
+
+if (Math.abs(input.slopePercent) > A380_CERTIFIED_LIMITS.maxMeanRunwaySlopePercent) {
+  warnings.push(
+    `RUNWAY MEAN SLOPE OUTSIDE CERTIFIED LIMIT ±${A380_CERTIFIED_LIMITS.maxMeanRunwaySlopePercent} %`,
+  );
+}
+
+if (
+  input.brakeTempC !== undefined &&
+  input.brakeTempC !== null &&
+  input.brakeTempC > A380_CERTIFIED_LIMITS.maxBrakeTempForTakeoffC
+) {
+  warnings.push(
+    `BRAKE TEMPERATURE ABOVE TAKEOFF LIMIT ${A380_CERTIFIED_LIMITS.maxBrakeTempForTakeoffC} °C`,
+  );
+}
+
+if (estimatedTireSpeedKt > A380_CERTIFIED_LIMITS.maxGroundTireSpeedKt) {
+  warnings.push(
+    `ESTIMATED TIRE SPEED ABOVE LIMIT ${A380_CERTIFIED_LIMITS.maxGroundTireSpeedKt} KT`,
+  );
+}
+
+const maxConfigSpeedKt = getMaxSpeedForTakeoffConfigKt(input.flapConfig);
+
+if (vSpeeds.v2 > maxConfigSpeedKt) {
+  warnings.push(
+    `V2 ABOVE MAX SPEED FOR ${input.flapConfig} (${maxConfigSpeedKt} KT)`,
+  );
+}
+
+
+
   if (input.towKg > input.weightVariant.mtowKg) {
     warnings.push(`STRUCTURAL MTOW EXCEEDED (${Math.round(input.weightVariant.mtowKg / 1000)} T LIMIT)`);
   }
@@ -552,19 +673,20 @@ export function calculateTakeoffPerformance(input: PilotInput): TakeoffResult {
   }
 
 
-  if (wind.headwindKt < -A380_PERF_PLACEHOLDERS.maxTailwindKt) {
-    warnings.push(`TAILWIND ABOVE PLACEHOLDER LIMIT ${A380_PERF_PLACEHOLDERS.maxTailwindKt} KT`);
+  if (wind.headwindKt < -A380_CERTIFIED_LIMITS.maxTakeoffTailwindKt) {
+    warnings.push(
+      `TAILWIND ABOVE CERTIFIED TAKEOFF LIMIT ${A380_CERTIFIED_LIMITS.maxTakeoffTailwindKt} KT`,
+    );
   }
 
-  const crosswindLimit =
-    input.runwayCondition === 'DRY'
-      ? A380_PERF_PLACEHOLDERS.maxCrosswindDryKt
-      : input.runwayCondition === 'WET'
-        ? A380_PERF_PLACEHOLDERS.maxCrosswindWetKt
-        : A380_PERF_PLACEHOLDERS.maxCrosswindContaminatedKt;
+  const crosswindLimit = getTakeoffCrosswindLimitKt(input);
 
   if (Math.abs(wind.crosswindKt) > crosswindLimit) {
-    warnings.push(`CROSSWIND ABOVE PLACEHOLDER LIMIT ${crosswindLimit} KT`);
+    warnings.push(
+      `CROSSWIND ABOVE CERTIFIED TAKEOFF LIMIT ${crosswindLimit} KT${
+        input.rwycc !== undefined ? ` FOR RWYCC ${input.rwycc}` : ''
+      }`,
+    );
   }
 
   if (flexForcedToToga) {
@@ -617,6 +739,7 @@ export function calculateTakeoffPerformance(input: PilotInput): TakeoffResult {
     ths,
     headwindKt: round1(wind.headwindKt),
     crosswindKt: round1(wind.crosswindKt),
+    estimatedTireSpeedKt,
     pressureAltitudeFt: Math.round(pressureAltitudeFt),
     isaDeviationC: round1(isaDeviationC),
     densityAltitudeFt: Math.round(densityAltitudeFt),
@@ -878,12 +1001,12 @@ function estimateFlexTemp(
 
   const minUsefulFlexTempC = Math.ceil(
     Math.max(
-      input.oatC + A380_PERF_PLACEHOLDERS.minFlexAboveOatC,
+      input.oatC,
       flatRatedTempC + 1,
     ),
   );
 
-  const maxFlexTempC = TRENT_972B_84_ENGINE.maxFlexTempC;
+  const maxFlexTempC = getMaxCertifiedFlexTempC(input.elevationFt);
 
   if (minUsefulFlexTempC >= maxFlexTempC) {
     return null;
@@ -934,6 +1057,49 @@ function estimateFlexTemp(
 
 function getIsaTemperatureC(elevationFt: number): number {
   return 15 - 1.98 * (elevationFt / 1000);
+}
+
+function getTakeoffCrosswindLimitKt(input: PilotInput): number {
+  if (input.rwycc !== undefined) {
+    return A380_TAKEOFF_CROSSWIND_LIMIT_BY_RWYCC[input.rwycc];
+  }
+
+  if (input.runwayCondition === 'DRY') {
+    return A380_PERF_PLACEHOLDERS.maxCrosswindDryKt;
+  }
+
+  if (input.runwayCondition === 'WET') {
+    return A380_PERF_PLACEHOLDERS.maxCrosswindWetKt;
+  }
+
+  return A380_PERF_PLACEHOLDERS.maxCrosswindContaminatedKt;
+}
+
+function getMaxSpeedForTakeoffConfigKt(flapConfig: FlapConfig): number {
+  if (flapConfig === 'CONF 1+F') {
+    return A380_CERTIFIED_LIMITS.maxFlapSpeedKt.config1F;
+  }
+
+  if (flapConfig === 'CONF 2') {
+    return A380_CERTIFIED_LIMITS.maxFlapSpeedKt.config2;
+  }
+
+  return A380_CERTIFIED_LIMITS.maxFlapSpeedKt.config3;
+}
+
+function getReducedThrustNotAllowedReason(input: PilotInput): string | null {
+  if (
+    input.runwayCondition === 'CONTAMINATED' &&
+    !A380_CERTIFIED_LIMITS.reducedThrustAllowedOnContaminatedRunway
+  ) {
+    return 'FLEX NOT ALLOWED ON CONTAMINATED RUNWAYS';
+  }
+
+  return null;
+}
+
+function getMaxCertifiedFlexTempC(elevationFt: number): number {
+  return getIsaTemperatureC(elevationFt) + A380_CERTIFIED_LIMITS.maxFlexIsaDeviationC;
 }
 
 function getFlatRatedTemperatureC(elevationFt: number): number {

@@ -17,6 +17,49 @@ import {
   type RunwayOption,
 } from './performance/data/airportWeatherApi';
 
+type RunwayConditionSelection =
+  | 'DRY_RWYCC_6'
+  | 'WET_RWYCC_5'
+  | 'CONTAMINATED_RWYCC_4'
+  | 'CONTAMINATED_RWYCC_3_2'
+  | 'CONTAMINATED_RWYCC_1';
+
+const RUNWAY_CONDITION_OPTIONS: Record<
+  RunwayConditionSelection,
+  {
+    label: string;
+    runwayCondition: TakeoffInput['runwayCondition'];
+    rwycc: NonNullable<TakeoffInput['rwycc']>;
+  }
+> = {
+  DRY_RWYCC_6: {
+    label: 'DRY - RWYCC 6',
+    runwayCondition: 'DRY',
+    rwycc: 6,
+  },
+  WET_RWYCC_5: {
+    label: 'WET - RWYCC 5',
+    runwayCondition: 'WET',
+    rwycc: 5,
+  },
+  CONTAMINATED_RWYCC_4: {
+    label: 'CONTAMINATED - RWYCC 4',
+    runwayCondition: 'CONTAMINATED',
+    rwycc: 4,
+  },
+  CONTAMINATED_RWYCC_3_2: {
+    label: 'CONTAMINATED - RWYCC 3/2',
+    runwayCondition: 'CONTAMINATED',
+    rwycc: 2,
+  },
+  CONTAMINATED_RWYCC_1: {
+    label: 'CONTAMINATED - RWYCC 1',
+    runwayCondition: 'CONTAMINATED',
+    rwycc: 1,
+  },
+};
+
+
 function parseNumber(value: string): number {
   return Number(value.trim().replace(',', '.'));
 }
@@ -83,8 +126,8 @@ function App() {
   const [flapConfig, setFlapConfig] =
     useState<TakeoffInput['flapConfig'] | ''>('');
   const [antiIce, setAntiIce] = useState<TakeoffInput['antiIce'] | ''>('');
-  const [runwayCondition, setRunwayCondition] =
-    useState<TakeoffInput['runwayCondition'] | ''>('');
+  const [runwayConditionSelection, setRunwayConditionSelection] =
+    useState<RunwayConditionSelection | ''>('');
   const [thrustMode, setThrustMode] =
     useState<TakeoffInput['thrustMode'] | ''>('');
   const [airCond, setAirCond] = useState<'ON' | 'OFF' | ''>('');
@@ -189,7 +232,7 @@ function App() {
     setTakeoffCgRaw('');
     setFlapConfig('');
     setAntiIce('');
-    setRunwayCondition('');
+    setRunwayConditionSelection('');
     setThrustMode('');
     setAirCond('');
 
@@ -265,6 +308,14 @@ function App() {
   }
 
   function computeTakeoff() {
+
+
+
+    const selectedRunwayCondition =
+      runwayConditionSelection === ''
+        ? null
+        : RUNWAY_CONDITION_OPTIONS[runwayConditionSelection];
+
     if (!selectedAircraft) {
       alert('Select an aircraft first.');
       return;
@@ -286,7 +337,7 @@ function App() {
       !takeoffCgRaw ||
       !flapConfig ||
       !antiIce ||
-      !runwayCondition ||
+      !selectedRunwayCondition ||
       !thrustMode ||
       !airCond
     ) {
@@ -340,7 +391,9 @@ function App() {
       cgPercentMac: takeoffCgPercentMac,
 
       flapConfig,
-      runwayCondition,
+      runwayCondition: selectedRunwayCondition.runwayCondition,
+      rwycc: selectedRunwayCondition.rwycc,
+      runwayWidthM: selectedRunway.widthM,
       packsOn: airCond === 'ON',
       antiIce,
       thrustMode,
@@ -538,19 +591,20 @@ function App() {
 
             <DataRow label="RWY COND">
               <select
-                value={runwayCondition}
-                onChange={(e) => {
-                  setRunwayCondition(
-                    e.target.value as TakeoffInput['runwayCondition'] | '',
-                  );
-                  invalidateResult();
-                }}
-              >
-                <option value=""></option>
-                <option>DRY</option>
-                <option>WET</option>
-                <option>CONTAMINATED</option>
-              </select>
+               value={runwayConditionSelection}
+               onChange={(e) => {
+                 setRunwayConditionSelection(e.target.value as RunwayConditionSelection | '');
+                 invalidateResult();
+               }}
+             >
+               <option value=""></option>
+
+               {Object.entries(RUNWAY_CONDITION_OPTIONS).map(([value, option]) => (
+                 <option key={value} value={value}>
+                   {option.label}
+                 </option>
+               ))}
+             </select>
             </DataRow>
 
             <DataRow label="A-ICE">

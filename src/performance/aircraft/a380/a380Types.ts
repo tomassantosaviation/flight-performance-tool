@@ -1,5 +1,7 @@
 export type RunwayCondition = 'DRY' | 'WET' | 'CONTAMINATED';
 
+export type Rwycc = 1 | 2 | 3 | 4 | 5 | 6;
+
 export type FlapConfig = 'CONF 1+F' | 'CONF 2' | 'CONF 3';
 
 export type AntiIceConfig = 'OFF' | 'ENG' | 'ENG+WING';
@@ -40,6 +42,9 @@ export interface TakeoffInput {
 
   flapConfig: FlapConfig;
   runwayCondition: RunwayCondition;
+  rwycc?: Rwycc;
+  runwayWidthM?: number | null;
+  brakeTempC?: number | null;
   packsOn: boolean;
   antiIce: AntiIceConfig;
   thrustMode: ThrustMode;
@@ -68,6 +73,7 @@ export interface TakeoffResult {
   flexReason?: string;
   ths: string;
   headwindKt: number;
+  estimatedTireSpeedKt: number;
   crosswindKt: number;
   pressureAltitudeFt: number;
   isaDeviationC: number;
