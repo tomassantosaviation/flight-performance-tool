@@ -404,17 +404,38 @@ function App() {
     setComputedResult(selectedAircraft.calculateTakeoff(input));
   }
 
-  if (screen === 'home') {
-    return (
-      <main className="home-shell">
-        <section className="home-card">
-          <div className="home-topline">SIMULATION TOOL ONLY</div>
+if (screen === 'home') {
+  return (
+    <main className="home-shell">
+      <section className="home-panel">
+        <header className="home-header">
+          <div className="home-status">
+            <span className="home-status-dot" />
+            SIMULATION TOOL ONLY
+          </div>
 
-          <h1>Performance Tool</h1>
-          <p className="home-subtitle">Select aircraft and performance module.</p>
+          <h1>Flight Performance</h1>
 
-          <div className="home-selector">
-            <span>Aircraft</span>
+          <p className="home-subtitle">
+            Aircraft performance calculation suite
+          </p>
+        </header>
+
+        <section className="home-aircraft-section">
+          <div className="home-section-heading">
+            <div>
+              <span className="home-step">01</span>
+              <h2>Select aircraft</h2>
+            </div>
+
+            {selectedAircraft && (
+              <span className="home-aircraft-status">AIRCRAFT LOADED</span>
+            )}
+          </div>
+
+          <label className="home-selector">
+            <span>Aircraft / engine / weight variant</span>
+
             <select
               value={selectedAircraftId}
               onChange={(event) =>
@@ -429,33 +450,65 @@ function App() {
                 </option>
               ))}
             </select>
+          </label>
+        </section>
+
+        <section className="home-module-section">
+          <div className="home-section-heading">
+            <div>
+              <span className="home-step">02</span>
+              <h2>Select module</h2>
+            </div>
           </div>
 
           <div className="module-grid">
             <button
               type="button"
-              className="module-card active"
+              className="module-card module-card-active"
               disabled={!selectedAircraft}
               onClick={() => setScreen('takeoff')}
             >
-              <span className="module-title">TAKEOFF</span>
-              <span className="module-desc">Takeoff Performance Calculation</span>
+              <span className="module-card-code">TO</span>
+
+              <span className="module-card-content">
+                <strong>Takeoff</strong>
+                <span>
+                  Calculate V-speeds, thrust setting, trim and performance
+                  limits.
+                </span>
+              </span>
+
+              <span className="module-card-arrow">›</span>
             </button>
 
-            <button type="button" className="module-card disabled" disabled>
-              <span className="module-title">LANDING</span>
-              <span className="module-desc">Coming later</span>
+            <button
+              type="button"
+              className="module-card module-card-disabled"
+              disabled
+            >
+              <span className="module-card-code">LDG</span>
+
+              <span className="module-card-content">
+                <strong>Landing</strong>
+                <span>
+                  Landing distance and approach performance.
+                </span>
+              </span>
+
+              <span className="module-card-badge">COMING LATER</span>
             </button>
           </div>
-
-          <div className="home-warning">Not for real-world aviation.</div>
-          <div className="home-warning">Made by Tomás Santos</div>
         </section>
-      </main>
-    );
-  }
 
-  const result = computedResult;
+        <footer className="home-footer">
+          <span>Not for real-world aviation</span>
+          <span className="home-footer-separator" />
+          <span>Developed by Tomás Santos</span>
+        </footer>
+      </section>
+    </main>
+  );
+}
 
 
 
