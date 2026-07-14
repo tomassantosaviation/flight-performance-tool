@@ -510,7 +510,7 @@ if (screen === 'home') {
   );
 }
 
-
+const result = computedResult;
 
   return (
     <main className="app-shell">
