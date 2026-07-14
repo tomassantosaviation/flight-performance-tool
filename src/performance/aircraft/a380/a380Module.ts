@@ -22,14 +22,15 @@ export interface AircraftPerformanceModule {
   calculateTakeoff: (input: TakeoffInput) => TakeoffResult;
 }
 
-export function calculateA380Takeoff(input: TakeoffInput): TakeoffResult {
+export function calculateA380Takeoff(
+  input: TakeoffInput,
+): TakeoffResult {
   return calculateTakeoffPerformance({
     ...input,
 
-    // The old CLI expected this field because it handled runway lookup itself.
-    // The app now gets runway data separately from airportWeatherApi.ts.
+    // Kept for compatibility with the browser-safe calculator core.
     runwaySurface: 'UNKNOWN',
-    }) as unknown as TakeoffResult;
+  });
 }
 
 export const a380Module: AircraftPerformanceModule = {

@@ -36,6 +36,7 @@ export interface TakeoffInput {
   qnhHpa: number;
   windDirectionDeg: number;
   windSpeedKt: number;
+  windGustKt?: number;
 
   towKg: number;
   cgPercentMac: number;
@@ -44,7 +45,6 @@ export interface TakeoffInput {
   runwayCondition: RunwayCondition;
   rwycc?: Rwycc;
   runwayWidthM?: number | null;
-  brakeTempC?: number | null;
   packsOn: boolean;
   antiIce: AntiIceConfig;
   thrustMode: ThrustMode;

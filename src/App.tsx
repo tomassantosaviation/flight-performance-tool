@@ -149,8 +149,14 @@ function App() {
     setComputedResult(null);
   }
 
-  useEffect(() => {
-    const icao = airportIcao.trim().toUpperCase();
+useEffect(() => {
+  const icao = airportIcao.trim().toUpperCase();
+  let cancelled = false;
+
+  const timeoutId = window.setTimeout(async () => {
+    if (cancelled) {
+      return;
+    }
 
     if (icao.length === 0) {
       setAirportDataStatus('');
@@ -179,45 +185,45 @@ function App() {
       return;
     }
 
-    let cancelled = false;
+    try {
+      setAirportDataStatus('FETCHING RWYS...');
+      setRunwayOptions([]);
+      setSelectedRunwayKey('');
+      setSelectedRunway(null);
+      setRunwayIdent('');
+      setComputedResult(null);
 
-    const timeoutId = window.setTimeout(async () => {
-      try {
-        setAirportDataStatus('FETCHING RWYS...');
-        setRunwayOptions([]);
-        setSelectedRunwayKey('');
-        setSelectedRunway(null);
-        setRunwayIdent('');
-        setComputedResult(null);
+      const options = await fetchRunwayOptions(icao);
 
-        const options = await fetchRunwayOptions(icao);
-
-        if (cancelled) {
-          return;
-        }
-
-        setRunwayOptions(options);
-        setAirportDataStatus(`${options.length} RWY ENDS FOUND`);
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        setRunwayOptions([]);
-        setSelectedRunwayKey('');
-        setSelectedRunway(null);
-        setRunwayIdent('');
-        setAirportDataStatus(
-          error instanceof Error ? error.message : 'Runway fetch failed.',
-        );
+      if (cancelled) {
+        return;
       }
-    }, 500);
 
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
-  }, [airportIcao]);
+      setRunwayOptions(options);
+      setAirportDataStatus(`${options.length} RWY ENDS FOUND`);
+    } catch (error) {
+      if (cancelled) {
+        return;
+      }
+
+      setRunwayOptions([]);
+      setSelectedRunwayKey('');
+      setSelectedRunway(null);
+      setRunwayIdent('');
+
+      setAirportDataStatus(
+        error instanceof Error
+          ? error.message
+          : 'Runway fetch failed.',
+      );
+    }
+  }, 500);
+
+  return () => {
+    cancelled = true;
+    window.clearTimeout(timeoutId);
+  };
+}, [airportIcao]);
 
   function clearForm() {
     setAirportIcao('');
@@ -282,13 +288,20 @@ function App() {
 
       const metar = await fetchMetarDefaults(airportIcao);
 
+      const gustSuffix =
+        metar.windGustKt !== undefined
+          ? `G${metar.windGustKt}`
+          : '';
+
       if (metar.variableWind && metar.windSpeedKt !== undefined) {
-        setWindRaw(`VRB/${metar.windSpeedKt}`);
+        setWindRaw(`VRB/${metar.windSpeedKt}${gustSuffix}`);
       } else if (
         metar.windDirectionDeg !== undefined &&
         metar.windSpeedKt !== undefined
       ) {
-        setWindRaw(`${metar.windDirectionDeg}/${metar.windSpeedKt}`);
+        setWindRaw(
+          `${metar.windDirectionDeg}/${metar.windSpeedKt}${gustSuffix}`,
+        );
       }
 
       if (metar.oatC !== undefined) {
@@ -345,14 +358,36 @@ function App() {
       return;
     }
 
-    const [windDirectionText, windSpeedText] = windRaw.split('/');
+const windMatch = windRaw
+  .trim()
+  .toUpperCase()
+  .match(/^(\d{1,3}|VRB)\/(\d{1,3})(?:G(\d{1,3}))?$/);
 
-    const windDirectionDeg =
-      windDirectionText?.trim().toUpperCase() === 'VRB'
-        ? selectedRunway.headingTrueDeg
-        : parseNumber(windDirectionText ?? '');
+if (!windMatch) {
+  alert(
+    'Wind must be entered as 220/15 or 220/15G25.',
+  );
+  return;
+}
 
-    const windSpeedKt = parseNumber(windSpeedText ?? '');
+const windDirectionText = windMatch[1];
+const windSpeedText = windMatch[2];
+const windGustText = windMatch[3];
+
+if (windDirectionText === 'VRB') {
+  alert(
+    'Variable wind cannot be used automatically. Enter a specific wind direction before computing.',
+  );
+  return;
+}
+
+const windDirectionDeg = parseNumber(windDirectionText);
+const windSpeedKt = parseNumber(windSpeedText);
+
+const windGustKt =
+  windGustText === undefined
+    ? undefined
+    : parseNumber(windGustText);
 
     const oatNumber = parseNumber(oatC);
     const qnhNumber = parseNumber(qnhHpa);
@@ -362,12 +397,18 @@ function App() {
     if (
       !Number.isFinite(windDirectionDeg) ||
       !Number.isFinite(windSpeedKt) ||
+	  (windGustKt !== undefined && !Number.isFinite(windGustKt)) ||
       !Number.isFinite(oatNumber) ||
       !Number.isFinite(qnhNumber) ||
       !Number.isFinite(towKg) ||
       !Number.isFinite(takeoffCgPercentMac)
     ) {
       alert('Check numeric fields. Wind must be like 220/15 or VRB/5. TOCG must be a number.');
+      return;
+    }
+	
+	if (windGustKt !== undefined && windGustKt < windSpeedKt) {
+      alert('Wind gust cannot be lower than the steady wind speed.');
       return;
     }
 
@@ -386,6 +427,7 @@ function App() {
       qnhHpa: qnhNumber,
       windDirectionDeg,
       windSpeedKt,
+	  windGustKt,
 
       towKg,
       cgPercentMac: takeoffCgPercentMac,
@@ -438,9 +480,13 @@ if (screen === 'home') {
 
             <select
               value={selectedAircraftId}
-              onChange={(event) =>
-                setSelectedAircraftId(event.target.value as AircraftId | '')
-              }
+              onChange={(event) => {
+                setSelectedAircraftId(
+				  event.target.value as AircraftId | '',
+				);
+				
+				setComputedResult(null);
+              }}
             >
               <option value="">Select aircraft</option>
 
@@ -791,7 +837,7 @@ const result = computedResult;
                     value={result.limitingFactor}
                     sub={result.status === 'T.O POSSIBLE' ? 'PERF OK' : 'CHECK'}
                   />
-                  <ResultRow label="ENG OUT ACC" value="3500 ft" />
+
                 </>
               ) : (
                 <>
@@ -802,7 +848,6 @@ const result = computedResult;
                   <BlankResultRow label="V2" />
                   <BlankResultRow label="THS" />
                   <BlankResultRow label="Limitation" />
-                  <BlankResultRow label="ENG OUT ACC" />
                 </>
               )}
             </div>
@@ -822,28 +867,86 @@ const result = computedResult;
             </div>
           </div>
 
-          <div className="procedure-card">
-            {result ? (
-              <>
-                <strong>EOSID: NON-STD.</strong>
-                <p>
-                  RWY {runwayIdent}. Maintain runway track. Follow published SID
-                  unless otherwise instructed.
-                </p>
-                <p className="procedure-warning">
-                  SIMULATION TOOL ONLY — NOT FOR REAL WORLD AVIATION.
-                </p>
-              </>
-            ) : (
-              <>
-                <strong>NO COMPUTATION</strong>
-                <p>Fill the takeoff data and press COMPUTE.</p>
-                <p className="procedure-warning">
-                  SIMULATION TOOL ONLY — NOT FOR REAL WORLD AVIATION.
-                </p>
-              </>
-            )}
+<div
+  className={`procedure-card ${
+    result &&
+    (
+      result.status !== 'T.O POSSIBLE' ||
+      result.warnings.length > 0
+    )
+      ? 'procedure-card-alert'
+      : result
+        ? 'procedure-card-ok'
+        : ''
+  }`}
+>
+  {result ? (
+    <>
+      <strong className="performance-status-title">
+        {result.status === 'T.O POSSIBLE' &&
+        result.warnings.length === 0
+          ? 'PERFORMANCE OK'
+          : 'PERFORMANCE CHECK'}
+      </strong>
+
+      {result.warnings.length > 0 ? (
+        <div className="performance-message-list">
+          {result.warnings.map((warning, index) => (
+            <div
+              className="performance-message performance-message-warning"
+              key={`${warning}-${index}`}
+            >
+              <span>CHECK</span>
+              <p>{warning}</p>
+            </div>
+          ))}
+        </div>
+      ) : result.status === 'T.O POSSIBLE' ? (
+        <p className="performance-ok-message">
+          All currently modelled takeoff-performance checks are satisfied.
+        </p>
+      ) : (
+        <div className="performance-message-list">
+          <div className="performance-message performance-message-warning">
+            <span>CHECK</span>
+            <p>
+              Takeoff performance is not acceptable for the selected
+              conditions.
+            </p>
           </div>
+        </div>
+      )}
+
+      {result.flexForcedToToga && (
+        <div className="performance-message performance-message-note">
+          <span>NOTE</span>
+          <p>
+            {result.flexReason ??
+              'FLEX is unavailable for the selected conditions. TOGA was selected automatically.'}
+          </p>
+        </div>
+      )}
+
+      <p className="procedure-warning">
+        SIMULATION TOOL ONLY — NOT FOR REAL-WORLD AVIATION.
+      </p>
+    </>
+  ) : (
+    <>
+      <strong className="performance-status-title">
+        NO COMPUTATION
+      </strong>
+
+      <p className="performance-ok-message">
+        Fill in the takeoff data and press COMPUTE.
+      </p>
+
+      <p className="procedure-warning">
+        SIMULATION TOOL ONLY — NOT FOR REAL-WORLD AVIATION.
+      </p>
+    </>
+  )}
+</div>
         </section>
 
 <aside className="right-panel">

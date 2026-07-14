@@ -359,10 +359,17 @@ button {
 /* TAKEOFF SCREEN */
 
 .app-shell {
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.09), transparent 20%, rgba(0, 0, 0, 0.06)),
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.09),
+      transparent 20%,
+      rgba(0, 0, 0, 0.06)
+    ),
     #a8abab;
 }
 
@@ -402,9 +409,12 @@ button {
 }
 
 .app-body {
-  height: calc(100vh - 96px);
+  min-height: calc(100vh - 96px);
+  min-height: calc(100dvh - 96px);
+  height: auto;
+
   display: grid;
-  grid-template-columns: 292px minmax(500px, 1fr) 310px;
+  grid-template-columns: 292px minmax(0, 1fr) 330px;
   gap: 18px;
   padding: 26px 22px 18px;
 }
@@ -425,6 +435,81 @@ button {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.performance-status-title {
+  display: block;
+  color: #55ff56;
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.procedure-card-alert .performance-status-title {
+  color: #ffb45c;
+}
+
+.performance-ok-message {
+  margin: 16px auto 0;
+  color: #e4e9e9;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.performance-message-list {
+  display: grid;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.performance-message {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+
+  padding: 10px 12px;
+  border-radius: 5px;
+
+  text-align: left;
+}
+
+.performance-message span {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.performance-message p {
+  max-width: none;
+  margin: 0;
+
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.performance-message-warning {
+  border-left: 4px solid #ffb45c;
+  background: rgba(255, 180, 92, 0.1);
+  color: #ffd4a2;
+}
+
+.performance-message-warning span {
+  color: #ffb45c;
+}
+
+.performance-message-note {
+  margin-top: 10px;
+  border-left: 4px solid #65c7ee;
+  background: rgba(101, 199, 238, 0.1);
+  color: #d7f3ff;
+}
+
+.performance-message-note span {
+  color: #65c7ee;
 }
 
 .data-group {
@@ -515,10 +600,11 @@ button {
 .center-panel {
   min-width: 0;
   display: grid;
-  grid-template-columns: 250px minmax(260px, 1fr);
-  grid-template-rows: auto auto 1fr;
-  gap: 14px 18px;
+  grid-template-columns: minmax(320px, 350px) minmax(280px, 1fr);
+  grid-template-rows: auto auto;
+  gap: 14px 20px;
   align-content: start;
+  align-items: start;
 }
 
 .runway-title {
@@ -536,9 +622,9 @@ button {
 }
 
 .result-row {
-  min-height: 42px;
+  min-height: 49px;
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
+  grid-template-columns: 150px minmax(0, 1fr);
   align-items: center;
   border-bottom: 1px solid rgba(210, 215, 215, 0.34);
 }
@@ -548,8 +634,8 @@ button {
 }
 
 .result-label {
-  padding-left: 14px;
-  font-size: 16px;
+  padding-left: 16px;
+  font-size: 17px;
   font-weight: 900;
   letter-spacing: 0.05em;
   color: white;
@@ -557,14 +643,14 @@ button {
 
 .result-value-wrap {
   min-width: 0;
-  padding-right: 14px;
+  padding-right: 17px;
   text-align: right;
 }
 
 .result-value {
   display: block;
   color: #55ff56;
-  font-size: 18px;
+  font-size: 21px;
   font-weight: 900;
   white-space: nowrap;
 }
@@ -578,8 +664,8 @@ button {
 }
 
 .mini-card {
-  min-height: 68px;
-  padding: 14px;
+  min-height: 82px;
+  padding: 17px 18px;
   display: grid;
   align-content: center;
 }
@@ -591,19 +677,28 @@ button {
 }
 
 .mini-card strong {
-  margin-top: 7px;
+  margin-top: 8px;
   color: #55ff56;
-  font-size: 17px;
+  font-size: 20px;
   line-height: 1.25;
 }
 
 .procedure-card {
-  min-height: 314px;
-  padding: 18px;
-  font-size: 18px;
-  font-weight: 900;
-  line-height: 1.35;
+  width: 100%;
+  min-height: 0;
+  height: auto;
+  align-self: start;
+  padding: 24px 28px;
+
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.45;
   text-align: center;
+}
+
+.procedure-card p {
+  max-width: 720px;
+  margin: 16px auto 0;
 }
 
 .procedure-card strong {
@@ -612,7 +707,11 @@ button {
 }
 
 .procedure-warning {
-  margin-top: 28px;
+  margin-top: 24px !important;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: #d9dede;
+  font-size: 14px;
   letter-spacing: 0.07em;
 }
 
@@ -645,14 +744,11 @@ button {
 
 /* RESPONSIVE */
 
-@media (max-width: 1050px) {
-  .app-shell {
-    overflow: auto;
-  }
+@media (max-width: 1325px) {
 
   .app-body {
     height: auto;
-    grid-template-columns: 292px minmax(460px, 1fr);
+    grid-template-columns: 292px minmax(0, 1fr);
   }
 
   .right-panel {
@@ -683,9 +779,6 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .module-grid {
-    grid-template-columns: 1fr 1fr;
-  }
 
   .app-footer {
     gap: 22px;
@@ -693,13 +786,7 @@ button {
 }
 
 @media (max-width: 560px) {
-  .home-card {
-    padding: 24px;
-  }
 
-  .module-grid {
-    grid-template-columns: 1fr;
-  }
 
   .app-header {
     grid-template-columns: 100px 1fr 70px;
@@ -732,9 +819,6 @@ button {
   color: rgba(85, 255, 86, 0.35);
 }
 
-.result-value.muted {
-  color: rgba(85, 255, 86, 0.35);
-}
 
 .inline-control {
   display: grid;
@@ -785,11 +869,6 @@ button {
 /* FINAL RWYVIZ RUNWAY VISUAL            */
 /* ===================================== */
 
-@media (min-width: 1051px) {
-  .app-body {
-    grid-template-columns: 292px minmax(500px, 1fr) 330px !important;
-  }
-}
 
 .right-panel {
   position: relative;
@@ -982,10 +1061,10 @@ button {
 
 .rwyviz-wind-simple {
   position: absolute;
-  top: 61%;
-  left: 190px;
-  width: 120px;
-  height: 110px;
+  top: 60%;
+  left: 178px;
+  width: 145px;
+  height: 130px;
   color: #35ff4f;
   z-index: 90;
 }
@@ -994,22 +1073,29 @@ button {
   position: absolute;
   top: 0;
   left: 0;
+
+  width: 68px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+
   color: #35ff4f;
-  font-size: 52px;
+  font-size: 64px;
   font-weight: 900;
   line-height: 1;
+
   transform-origin: 50% 50%;
-  text-shadow: 0 0 7px rgba(53, 255, 79, 0.65);
+  text-shadow: 0 0 8px rgba(53, 255, 79, 0.65);
 }
 
 .rwyviz-wind-data {
   position: absolute;
-  top: 58px;
-  left: 0;
+  top: 70px;
+  left: 2px;
   color: #35ff4f;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
-  line-height: 1.18;
+  line-height: 1.3;
   white-space: nowrap;
 }
 

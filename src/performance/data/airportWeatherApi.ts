@@ -32,8 +32,58 @@ const RUNWAYS_CSV_URL =
 const METAR_API_URL = (icao: string) =>
   `https://metar.vatsim.net/${encodeURIComponent(icao)}?format=json`;
 
+type CsvRow = Record<string, string>;
+
+let airportsDataPromise: Promise<CsvRow[]> | null = null;
+let runwaysDataPromise: Promise<CsvRow[]> | null = null;
+
+async function downloadCsvData(
+  url: string,
+  description: string,
+): Promise<CsvRow[]> {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(
+      `${description} data could not be fetched (${response.status}).`,
+    );
+  }
+
+  const csv = await response.text();
+
+  return parseCsv(csv);
+}
+
+function getAirportsData(): Promise<CsvRow[]> {
+  if (airportsDataPromise === null) {
+    airportsDataPromise = downloadCsvData(
+      AIRPORTS_CSV_URL,
+      'Airport',
+    ).catch((error: unknown) => {
+      airportsDataPromise = null;
+      throw error;
+    });
+  }
+
+  return airportsDataPromise;
+}
+
+function getRunwaysData(): Promise<CsvRow[]> {
+  if (runwaysDataPromise === null) {
+    runwaysDataPromise = downloadCsvData(
+      RUNWAYS_CSV_URL,
+      'Runway',
+    ).catch((error: unknown) => {
+      runwaysDataPromise = null;
+      throw error;
+    });
+  }
+
+  return runwaysDataPromise;
+}
+
   
-function parseCsv(csv: string): Record<string, string>[] {
+function parseCsv(csv: string): CsvRow[] {
   const rows: string[][] = [];
   let row: string[] = [];
   let value = '';
@@ -86,7 +136,7 @@ function parseCsv(csv: string): Record<string, string>[] {
   const headers = rows[0] ?? [];
 
   return rows.slice(1).map((csvRow) => {
-    const object: Record<string, string> = {};
+    const object: CsvRow = {};
 
     headers.forEach((header, index) => {
       object[header] = csvRow[index] ?? '';
@@ -103,6 +153,10 @@ function parseNumber(value: string | undefined, fallback = 0): number {
 }
 
 function parseOptionalNumber(value: string | undefined): number | null {
+  if (value === undefined || value.trim() === '') {
+    return null;
+  }
+
   const number = Number(value);
 
   return Number.isFinite(number) ? number : null;
@@ -143,6 +197,7 @@ function deriveHeadingFromRunwayIdent(ident: string): number {
 function makeRunwayOption(
   runway: Record<string, string>,
   departureEnd: 'LE' | 'HE',
+  airportElevationFt: number,
 ): RunwayOption {
   const lengthM = ftToM(parseNumber(runway.length_ft, 0));
   const widthFt = parseOptionalNumber(runway.width_ft);
@@ -154,19 +209,19 @@ function makeRunwayOption(
   const ident = departureEnd === 'LE' ? leIdent : heIdent;
   const oppositeIdent = departureEnd === 'LE' ? heIdent : leIdent;
 
-  const startElevationFt = parseNumber(
+const startElevationFt =
+  parseOptionalNumber(
     departureEnd === 'LE'
       ? runway.le_elevation_ft
       : runway.he_elevation_ft,
-    0,
-  );
+  ) ?? airportElevationFt;
 
-  const endElevationFt = parseNumber(
+const endElevationFt =
+  parseOptionalNumber(
     departureEnd === 'LE'
       ? runway.he_elevation_ft
       : runway.le_elevation_ft,
-    startElevationFt,
-  );
+  ) ?? startElevationFt;
 
   const headingTrueDeg = parseNumber(
     departureEnd === 'LE'
@@ -206,17 +261,10 @@ export async function fetchRunwayOptions(airportIcao: string): Promise<RunwayOpt
     throw new Error('Enter an airport ICAO first.');
   }
 
-  const [airportsResponse, runwaysResponse] = await Promise.all([
-    fetch(AIRPORTS_CSV_URL),
-    fetch(RUNWAYS_CSV_URL),
-  ]);
-
-  if (!airportsResponse.ok || !runwaysResponse.ok) {
-    throw new Error('Airport/runway data could not be fetched.');
-  }
-
-  const airports = parseCsv(await airportsResponse.text());
-  const runways = parseCsv(await runwaysResponse.text());
+const [airports, runways] = await Promise.all([
+  getAirportsData(),
+  getRunwaysData(),
+]);
 
   const airport = airports.find((row) =>
     [
@@ -232,6 +280,9 @@ export async function fetchRunwayOptions(airportIcao: string): Promise<RunwayOpt
   if (!airport) {
     throw new Error(`Airport ${query} not found.`);
   }
+  
+  const airportElevationFt =
+  parseOptionalNumber(airport.elevation_ft) ?? 0;
 
   const airportRunways = runways.filter(
     (runway) =>
@@ -245,8 +296,8 @@ export async function fetchRunwayOptions(airportIcao: string): Promise<RunwayOpt
 
   return airportRunways
     .flatMap((runway) => [
-      makeRunwayOption(runway, 'LE'),
-      makeRunwayOption(runway, 'HE'),
+      makeRunwayOption(runway, 'LE', airportElevationFt),
+      makeRunwayOption(runway, 'HE', airportElevationFt),
     ])
     .filter((runway) => runway.ident !== '')
     .sort((a, b) => a.ident.localeCompare(b.ident));
@@ -315,7 +366,7 @@ export async function fetchMetarDefaults(airportIcao: string): Promise<MetarDefa
 
   const body = await response.text();
 
-  let raw = '';
+  let raw: string;
 
   try {
     const json = JSON.parse(body) as unknown;
